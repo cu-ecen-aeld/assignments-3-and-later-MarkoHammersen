@@ -26,7 +26,7 @@ bool do_system(const char *cmd)
         return false;
     }
 
-    return false;
+    return true;
 }
 
 /**
@@ -57,13 +57,13 @@ bool do_exec(int count, ...)
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
     command[count] = command[count];
+    va_end(args);
 
     int status;
     pid_t pid = fork();
     if(pid < 0)
     {
         printf("Fork Failed - %s\n", strerror(errno));
-        va_end(args);
         return false;
     }
 
@@ -72,8 +72,7 @@ bool do_exec(int count, ...)
         if(execv(command[0], command) == -1)
         {
             printf("Execv Failed - %s\n", strerror(errno));
-            va_end(args);
-            return false;
+            exit(EXIT_FAILURE); // Exit child with failure
         }
     }
     else // Parent process
@@ -82,12 +81,10 @@ bool do_exec(int count, ...)
         if (waitpid(pid, &status, 0) == -1)
         {
             printf("Waitpid Failed - %s\n", strerror(errno));
-            va_end(args);
             return false;
         }
     }
 
-    va_end(args);    
     // check if child process terminated successfully
     return (WIFEXITED(status) && WEXITSTATUS(status) == 0);
 
