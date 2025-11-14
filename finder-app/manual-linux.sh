@@ -144,7 +144,7 @@ echo "done"
 
 echo "---------------- All Done -----------------------------------"
 
-echo "---------------- Start QEMU Terminal ------------------------"
-cd "${OUTDIR}"
-sudo ${FINDER_APP_DIR}/start-qemu-app.sh
+# echo "---------------- Start QEMU Terminal ------------------------"
+# cd "${OUTDIR}"
+# sudo ${FINDER_APP_DIR}/start-qemu-app.sh
 
