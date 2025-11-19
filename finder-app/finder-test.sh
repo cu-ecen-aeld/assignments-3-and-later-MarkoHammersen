@@ -9,14 +9,8 @@ NUMFILES=10
 WRITESTR=AELD_IS_FUN
 WRITEDIR=/tmp/aeld-data
 
-if [ -f /etc/finder-app/conf/username.txt ]; then
-	# for assignment 4.2 config files are at /etc/finder-app/conf.
-	username=$(cat /etc/finder-app/conf/username.txt)
-	assignment=$(cat /etc/finder-app/conf/assignment.txt)
-else
-	username=$(cat conf/username.txt)
-	assignment=$(cat conf/assignment.txt)
-fi
+username=$(cat /etc/finder-app/conf/username.txt)
+assignment=$(cat /etc/finder-app/conf/assignment.txt)
 
 if [ $# -lt 3 ]; then
 	echo "Using default value ${WRITESTR} for string to write"
@@ -58,22 +52,11 @@ fi
 # make
 for i in $( seq 1 $NUMFILES)
 do
-if [ "$assignment" = "assignment4-buildroot" ]; then
-	writer "$WRITEDIR/${username}$i.txt" "$WRITESTR" # assignment 4.2: assuming all executables are in the PATH 
-else
-#	./writer.sh "$WRITEDIR/${username}$i.txt" "$WRITESTR"
-	./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
-fi
+	writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
 done
 
-
-if [ "$assignment" = "assignment4-buildroot" ]; then
-	OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR") # assignment 4.2: assuming all executables are in the PATH 
-	# assignment 4.2: modify your finder-test.sh script to write a file with output of the finder command to /tmp/assignment4-result.txt
-	echo "$OUTPUTSTRING" > /tmp/assignment4-result.txt
-else
-	OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
-fi
+OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR") # assignment 4.2: assuming all executables are in the PATH 
+echo "$OUTPUTSTRING" > /tmp/assignment4-result.txt
 
 # remove temporary directories
 rm -rf /tmp/aeld-data
