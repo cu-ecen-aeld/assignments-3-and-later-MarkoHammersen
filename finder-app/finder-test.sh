@@ -9,12 +9,16 @@ NUMFILES=10
 WRITESTR=AELD_IS_FUN
 WRITEDIR=/tmp/aeld-data
 
-username=$(cat conf/username.txt)
-# for assignment 4.2 config files are at /etc/finder-app/conf.
-#username=$(cat /etc/finder-app/conf/username.txt)
+if [ -f /etc/finder-app/conf/username.txt ]; then
+	# for assignment 4.2 config files are at /etc/finder-app/conf.
+	username=$(cat /etc/finder-app/conf/username.txt)
+	assignment=$(cat /etc/finder-app/conf/assignment.txt)
+else
+	username=$(cat conf/username.txt)
+	assignment=$(cat conf/assignment.txt)
+fi
 
-if [ $# -lt 3 ]
-then
+if [ $# -lt 3 ]; then
 	echo "Using default value ${WRITESTR} for string to write"
 	if [ $# -lt 1 ]
 	then
@@ -35,13 +39,7 @@ echo "Writing ${NUMFILES} files containing string ${WRITESTR} to ${WRITEDIR}"
 rm -rf "${WRITEDIR}"
 
 # create $WRITEDIR if not assignment1
-assignment=`cat conf/assignment.txt`
-# for assignment 4.2 config files are at /etc/finder-app/conf.
-#assignment=$(cat /etc/finder-app/conf/assignment.txt)
-
-
-if [ $assignment != 'assignment1' ]
-then
+if [ $assignment != 'assignment1' ]; then
 	mkdir -p "$WRITEDIR"
 
 	#The WRITEDIR is in quotes because if the directory path consists of spaces, then variable substitution will consider it as multiple argument.
@@ -58,19 +56,24 @@ fi
 # echo "Removing the old writer utility and compiling as a native application"
 # make clean
 # make
-
 for i in $( seq 1 $NUMFILES)
 do
+if [ "$assignment" = "assignment4-buildroot" ]; then
+	writer "$WRITEDIR/${username}$i.txt" "$WRITESTR" # assignment 4.2: assuming all executables are in the PATH 
+else
 #	./writer.sh "$WRITEDIR/${username}$i.txt" "$WRITESTR"
 	./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
-#	writer "$WRITEDIR/${username}$i.txt" "$WRITESTR" # assignment 4.2: assuming all executables are in the PATH 
+fi
 done
 
-OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
-#OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR") # assignment 4.2: assuming all executables are in the PATH 
 
-# assignment 4.2: modify your finder-test.sh script to write a file with output of the finder command to /tmp/assignment4-result.txt
-#echo "$OUTPUTSTRING" > /tmp/assignment4-result.txt
+if [ "$assignment" = "assignment4-buildroot" ]; then
+	OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR") # assignment 4.2: assuming all executables are in the PATH 
+	# assignment 4.2: modify your finder-test.sh script to write a file with output of the finder command to /tmp/assignment4-result.txt
+	echo "$OUTPUTSTRING" > /tmp/assignment4-result.txt
+else
+	OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
+fi
 
 # remove temporary directories
 rm -rf /tmp/aeld-data
