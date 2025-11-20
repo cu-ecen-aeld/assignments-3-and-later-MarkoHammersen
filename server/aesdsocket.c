@@ -69,6 +69,18 @@ int main(int argc, char *argv[])
 
     fprintf(stdout, "Socket created successfully\n");
 
+
+    int optval = 1;
+    if (setsockopt(fd_srv, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) 
+    {
+        fprintf(stderr, "setsockopt failed: %s\n", strerror(errno));
+        syslog(LOG_ERR, "setsockopt failed: %s", strerror(errno));
+        close(fd_srv);
+        closelog();
+        return -1;        
+    }
+
+
     struct addrinfo hints, *servinfo;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
