@@ -19,6 +19,15 @@
 
 #define BUFFER_SIZE  (1024 * 32)
 
+#define USE_AESD_CHAR_DEVICE
+
+#if (defined USE_AESD_CHAR_DEVICE)
+#define AESD_CHAR_DEV_PATH "/dev/aesdchar"
+#else
+#define AESD_CHAR_DEV_PATH "/var/tmp/aesdsocketdata"
+#endif
+
+
 typedef struct thread_args 
 {
     int client_fd;
@@ -150,8 +159,8 @@ static void timer_thread(void* arg)
             strftime(time_buffer, 100, "timestamp: %Y-%m-%d %H:%M:%S\n", tmp_time);
             fprintf(stdout, "timestamp: %s", time_buffer);
             pthread_mutex_lock(&lock);
-            int fd = open("/var/tmp/aesdsocketdata", O_WRONLY | O_CREAT | O_APPEND, 0644);
-            write(fd, time_buffer, strlen(time_buffer));
+            int fd = open(AESD_CHAR_DEV_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644);
+            //write(fd, time_buffer, strlen(time_buffer));
             close(fd);
             pthread_mutex_unlock(&lock);
             
@@ -187,12 +196,12 @@ static void* worker_thread(void* arg)
             // O_APPEND: append to end if exists
 
 
-            int fd = open("/var/tmp/aesdsocketdata", O_WRONLY | O_CREAT | O_APPEND, 0644);
+            int fd = open(AESD_CHAR_DEV_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644);
             write(fd, buffer, i + 1);
             close(fd);
             
             // Send entire file back
-            fd = open("/var/tmp/aesdsocketdata", O_RDONLY);
+            fd = open(AESD_CHAR_DEV_PATH, O_RDONLY);
             ssize_t file_bytes;
             while ((file_bytes = read(fd, buffer, BUFFER_SIZE)) > 0)
             {
@@ -245,8 +254,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    const char *filename ="/var/tmp/aesdsocketdata";
+#if (!defined USE_AESD_CHAR_DEVICE)
+    const char *filename = AESD_CHAR_DEV_PATH;
     (void)remove(filename); // Alte Datei entfernen, falls vorhanden
+#endif
 
     openlog("aesdsocket", LOG_PID | LOG_CONS, LOG_USER);
    
@@ -419,7 +430,9 @@ int main(int argc, char *argv[])
         remove_tail(&head);
     }
 
-    remove("/var/tmp/aesdsocketdata"); // Remove existing file
+#if (!defined USE_AESD_CHAR_DEVICE)
+    remove(AESD_CHAR_DEV_PATH); // Remove existing file
+#endif
     fprintf(stdout, "Shutting down server\n");
     syslog(LOG_INFO, "Caught signal, exiting");
     close(fd_srv);
