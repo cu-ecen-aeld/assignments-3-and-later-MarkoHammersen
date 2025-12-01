@@ -16,8 +16,9 @@
 #include <linux/printk.h>
 #include <linux/types.h>
 #include <linux/cdev.h>
-#include <linux/slab.h>
 #include <linux/fs.h> // file_operations
+#include <linux/slab.h>
+#include <asm/uaccess.h>
 #include "aesd-circular-buffer.h"
 #include "aesdchar.h"
 
@@ -108,7 +109,7 @@ static ssize_t aesd_write(struct file *filp, const char __user *buf, size_t coun
         return -ERESTARTSYS;
     }  
 
-    char *new_buffer = (char*)kmalloc(dev->current_write_entry.size + count, GFP_KERNEL);
+    char *new_buffer = kmalloc(dev->current_write_entry.size + count, GFP_KERNEL);
     if(new_buffer == NULL)
     {
         PDEBUG("failed to kmalloc");
