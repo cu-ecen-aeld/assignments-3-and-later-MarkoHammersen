@@ -76,6 +76,12 @@ static ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         return 0;
     }
     size_t out_size = entry->size - entry_offset_byte_rtn;
+
+    if(out_size > count)
+    {
+        out_size = count;
+    }
+
     *f_pos = *f_pos + out_size;
     retval = out_size;
     if(0 < copy_to_user(buf, &entry->buffptr[entry_offset_byte_rtn], out_size))
