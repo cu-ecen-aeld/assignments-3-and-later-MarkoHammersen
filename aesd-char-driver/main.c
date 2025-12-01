@@ -64,6 +64,7 @@ static ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     
     if (mutex_lock_interruptible(&dev->lock))
     {
+        PDEBUG("failed acquire lock");
         return -ERESTARTSYS;
     }  
 
@@ -72,13 +73,18 @@ static ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     if(entry == NULL)
     {
         mutex_unlock(&dev->lock);
-        return -ERESTARTSYS;
+        return 0;
     }
-    *f_pos = *f_pos + entry_offset_byte_rtn;
-    
-    (void)copy_to_user(buf, &entry->buffptr[entry_offset_byte_rtn], entry->size - entry_offset_byte_rtn);
-    
+    size_t out_size = entry->size - entry_offset_byte_rtn;
+    *f_pos = *f_pos + out_size;
+    retval = out_size;
+    if(0 < copy_to_user(buf, &entry->buffptr[entry_offset_byte_rtn], out_size))
+    {
+        PDEBUG("failed to copy to user");
+        retval = 0;
+    }    
     mutex_unlock(&dev->lock);
+    
     return retval;
 }
 
@@ -133,7 +139,16 @@ static ssize_t aesd_write(struct file *filp, const char __user *buf, size_t coun
             kfree(&dev->cbuf.entry[dev->cbuf.in_offs].buffptr);
         }
 
-        // write to circular buffer
+        char *temp = kmalloc(dev->current_write_entry.size + 1, GFP_KERNEL);
+        if(temp != NULL)
+        {
+            memcpy(temp, dev->current_write_entry.buffptr, dev->current_write_entry.size);
+            temp[dev->current_write_entry.size] = '\0';
+            PDEBUG("write to cb: %s", temp);
+            kfree(temp);
+        }
+
+        // write to circular buffer        
         aesd_circular_buffer_add_entry(&dev->cbuf, &dev->current_write_entry);
         dev->current_write_entry.buffptr = NULL;
         dev->current_write_entry.size = 0;
