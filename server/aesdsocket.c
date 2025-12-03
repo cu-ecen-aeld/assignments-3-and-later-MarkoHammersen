@@ -186,76 +186,68 @@ static void timer_thread(void* arg)
     free(time_buffer);
 }
 
-static void* worker_thread(void* arg)
+static bool socket2file(int client_fd, int fd_dev)
 {
-    thread_args_t *thread_args = (thread_args_t *)arg;
-
-    char *buffer = malloc(BUFFER_SIZE+1); // add space for terminating 0
-    ssize_t bytes_read;
+    char *buffer = malloc(BUFFER_SIZE+1);
+    int bytes_read;
     struct aesd_seekto seekto;
 
-    int fd_clnt = thread_args->client_fd;
-
-    pthread_mutex_lock(&lock);   // lock the mutex
-
-    // open file
-    int fd = open(AESD_CHAR_DEV_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644);
-    // read from socket and write to file
-    while (1)
+    do
     {
-        bytes_read = recv(fd_clnt, buffer, BUFFER_SIZE, 0);
-        if(bytes_read > 0)
-        {
-            buffer[bytes_read] = '\0'; // Null-terminate for printing and str operations
-            if(check_ioctl_seekto(buffer, &seekto.write_cmd, &seekto.write_cmd_offset))
-            {
-                fprintf(stdout, "ioctl: %s, %u,%u", buffer, seekto.write_cmd, seekto.write_cmd_offset);
-                ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
-                break;
-            }
-            else
-            {
-                write(fd, buffer, bytes_read);
-            }
-
-            if(buffer[bytes_read-1] == '\n')
-            {
-                close(fd);
-                // Send entire file back to socket
-                fd = open(AESD_CHAR_DEV_PATH, O_RDONLY);
-                ssize_t file_bytes;
-                while ((file_bytes = read(fd, buffer, BUFFER_SIZE)) > 0)
-                {
-                    fprintf(stdout, "Sending %zd bytes back to client\n", file_bytes);
-                    send(fd_clnt, buffer, file_bytes, 0);
-                }
-                break;
-            }
-        }
-        else
+        bytes_read = recv(client_fd, buffer, BUFFER_SIZE, 0);
+        if(bytes_read <= 0)
         {
             break;
         }
-    }
-    close(fd);
 
+        buffer[bytes_read + 1] = '\0';
+        if(check_ioctl_seekto(buffer, &seekto.write_cmd, &seekto.write_cmd_offset))
+        {
+            fprintf(stderr, "to ioctl: %u,%u\n", seekto.write_cmd, seekto.write_cmd_offset);
+            ioctl(fd_dev, AESDCHAR_IOCSEEKTO, &seekto);
+        }
+        else
+        {
+            fprintf(stderr, "to file: %s\n", buffer);
+            write(fd_dev, buffer, bytes_read);
+            //fsync(fd_dev);
+        }
+    }while(buffer[bytes_read-1] != '\n');
+
+    free(buffer);
+}
+
+static void file2socket(int client_fd, int fd_dev)
+{
+    char *buffer = malloc(BUFFER_SIZE + 1); // for terminating 0
+    int bytes_read;
+
+    while(1)
+    {
+        bytes_read = read(fd_dev, buffer, BUFFER_SIZE);
+        if(bytes_read <= 0)
+        {
+            break;
+        }
+        buffer[bytes_read] = '\0';
+        fprintf(stderr, "to socket: %s\n", buffer);
+        send(client_fd, buffer, bytes_read, 0);
+    }
+    free(buffer);
+}
+
+static void* worker_thread(void* arg)
+{
+    thread_args_t *thread_args = (thread_args_t *)arg;
+    int fd_clnt = thread_args->client_fd;
+
+    pthread_mutex_lock(&lock);   // lock the mutex
+    int fd_dev = open(AESD_CHAR_DEV_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    socket2file(fd_clnt, fd_dev);
+    file2socket(fd_clnt, fd_dev);
+    close(fd_dev);
     pthread_mutex_unlock(&lock); // unlock the mutex
 
-    if(bytes_read == 0)
-    {
-        fprintf(stdout, "Client disconnected\n");
-        syslog(LOG_INFO, "Client disconnected");
-    }
-    else if (bytes_read == -1)
-    {
-        fprintf(stderr, "recv failed: %s\n", strerror(errno));
-        syslog(LOG_ERR, "recv failed: %s", strerror(errno));
-    }
-    else
-    {
-        
-    }
-    
     return NULL;
 }
 
