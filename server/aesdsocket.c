@@ -16,6 +16,8 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 #define BUFFER_SIZE  (1024 * 32)
 
@@ -137,6 +139,19 @@ static void signal_handler(int signum)
     }
 }
 
+static int check_ioctl_seekto(const char *in, uint32_t* x, uint32_t* y)
+{
+    const char *prefix = "AESDCHAR_IOCSEEKTO:";
+    size_t length = strlen(prefix);
+
+    if(0 != strncmp(in, prefix, length))
+    {
+        return 0;
+    }
+
+    return sscanf(&in[length], "%u,%u", x, y) == 2;
+}
+
 static void timer_thread(void* arg)
 {
     time_t t;
@@ -175,52 +190,56 @@ static void* worker_thread(void* arg)
 {
     thread_args_t *thread_args = (thread_args_t *)arg;
 
-    char *buffer = malloc(BUFFER_SIZE);
+    char *buffer = malloc(BUFFER_SIZE+1); // add space for terminating 0
     ssize_t bytes_read;
-    size_t i = 0;
+    struct aesd_seekto seekto;
 
     int fd_clnt = thread_args->client_fd;
-//    fprintf(stdout, "fd_client %d from thread list\n", fd_clnt);
-    while ((bytes_read = recv(fd_clnt, &buffer[i], 1, 0)) > 0)
+
+    pthread_mutex_lock(&lock);   // lock the mutex
+
+    // open file
+    int fd = open(AESD_CHAR_DEV_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    // read from socket and write to file
+    while (1)
     {
-  //      fprintf(stdout, "Received byte: %d\n", buffer[i]);
-        if (buffer[i] == 10) // Newline character
+        bytes_read = recv(fd_clnt, buffer, BUFFER_SIZE, 0);
+        if(bytes_read > 0)
         {
-
-            buffer[i+1] = '\0'; // Null-terminate for printing
-            fprintf(stdout, "Received: %s\n", buffer);
-
-            pthread_mutex_lock(&lock);   // lock the mutex
-            // O_WRONLY: write only
-            // O_CREAT: create if not exists
-            // O_APPEND: append to end if exists
-
-
-            int fd = open(AESD_CHAR_DEV_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644);
-            write(fd, buffer, i + 1);
-            close(fd);
-            
-            // Send entire file back
-            fd = open(AESD_CHAR_DEV_PATH, O_RDONLY);
-            ssize_t file_bytes;
-            while ((file_bytes = read(fd, buffer, BUFFER_SIZE)) > 0)
+            buffer[bytes_read] = '\0'; // Null-terminate for printing and str operations
+            if(check_ioctl_seekto(buffer, &seekto.write_cmd, &seekto.write_cmd_offset))
             {
-                fprintf(stdout, "Sending %zd bytes back to client\n", file_bytes);
-                send(fd_clnt, buffer, file_bytes, 0);
+                fprintf(stdout, "ioctl: %s, %u,%u", buffer, seekto.write_cmd, seekto.write_cmd_offset);
+                ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
+                break;
             }
-            close(fd);
-            pthread_mutex_unlock(&lock); // unlock the mutex
-            i = 0;
+            else
+            {
+                write(fd, buffer, bytes_read);
+            }
+
+            if(buffer[bytes_read-1] == '\n')
+            {
+                close(fd);
+                // Send entire file back to socket
+                fd = open(AESD_CHAR_DEV_PATH, O_RDONLY);
+                ssize_t file_bytes;
+                while ((file_bytes = read(fd, buffer, BUFFER_SIZE)) > 0)
+                {
+                    fprintf(stdout, "Sending %zd bytes back to client\n", file_bytes);
+                    send(fd_clnt, buffer, file_bytes, 0);
+                }
+                break;
+            }
         }
         else
         {
-            i++;
-            assert(i < BUFFER_SIZE);
+            break;
         }
     }
-    free(buffer);
-    close(fd_clnt);
-    thread_args->completed = true;
+    close(fd);
+
+    pthread_mutex_unlock(&lock); // unlock the mutex
 
     if(bytes_read == 0)
     {
@@ -234,8 +253,7 @@ static void* worker_thread(void* arg)
     }
     else
     {
-        fprintf(stderr, "recv returned unexpected value: %zd\n", bytes_read);
-        syslog(LOG_ERR, "recv returned unexpected value: %zd", bytes_read);
+        
     }
     
     return NULL;
